@@ -2,7 +2,7 @@
 % Derivative-free optimization of a nanophotonic grating coupler.
 
 
-function [] = example1_brutesearch(varargin)
+function [efficiency, delta, width] = example1_brutesearch(varargin)
 
         %
         % Parse inputs.
@@ -29,13 +29,25 @@ function [] = example1_brutesearch(varargin)
     search_options = optimset(  'Display', 'iter', ...
                                 'TolX', 0.05, ...
                                 'Tolfun', 1e-16, ...
-                                'MaxFunEvals', 1e6, ...
-                                'MaxIter', 1e6, ...
+                                'MaxFunEvals', 1e3, ...
+                                'MaxIter', 1e3, ...
                                 'FunValCheck', 'on', ...
                                 'PlotFcns', {[]}, ...
                                 'OutputFcn', {[]});
 
-    fminsearch(fun, x0, search_options);
+    % Perform the optimization.
+    [x, fval] = fminsearch(fun, x0, search_options);
+
+
+        %
+        % Get the result.
+        %
+
+    delta = x(1:n);
+    width = x(n+1:end);
+    efficiency = -fval;
+    
+        
 
 
 
@@ -43,7 +55,7 @@ end
 
 
 function [P, E, H, grid, eps] = solve_grating(delta, width, flatten)
-% Simulate a grating coupled
+% Simulate a grating coupler.
 
     if isempty(delta) && isempty(width)
         no_struct = true;
@@ -120,10 +132,10 @@ function [P, E, H, grid, eps] = solve_grating(delta, width, flatten)
         end
     end
 
-    subplot(4, 1, 1);
+    if ~flatten; figure(2); end
     [E, H] = maxwell_solve(grid, eps, J);
 
-    subplot(4, 1, 2:4);
+    figure(1);
     maxwell_view(grid, eps, E, 'y', [nan 0 nan], 'field_phase', nan); % Visualize.
 
 
