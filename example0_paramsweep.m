@@ -1,6 +1,9 @@
 %% example0_paramsweep
 % Sweep the parameters of a waveguide-coupled disk resonator structure.
 
+%%% Description
+% Note that this example is especially tuned for the 2D, flattened case.
+
 function [gap, radius, P] = example0_paramsweep(varargin)
 
         %
@@ -9,7 +12,7 @@ function [gap, radius, P] = example0_paramsweep(varargin)
 
     options = my_parse_options(struct(  'gap', 0.018:0.001:0.021, ... 
                                         'radius', 1.039:0.001:1.043, ...
-                                        'flatten', false), ...
+                                        'flatten', true), ...
                                 varargin, mfilename);
 
 
@@ -87,14 +90,8 @@ function [P, E, H, grid, eps] = solve_ring(gap, radius, flatten)
         %
 
     % Excitation for the fundamental mode (of the ring's waveguide).
-    if flatten 
-        m = 2;
-    else
-        m = 1;
-    end
     J = maxwell_wgmode(grid, eps, [-1.5 wg_ypos 0], [+inf 2 2], 'mode_number', m);
 
-    fprintf('Initial excitation -- ');
     [E, H] = maxwell_solve(grid, eps, J);
 
 
