@@ -2,7 +2,7 @@
 % Derivative-based optimization of an H1 photonic crystal resonator.
 
 
-function [Emag, params] = example2_adjoint(varargin)
+function [fun, fun1, Emag, params] = example2_adjoint(varargin)
 
         %
         % Parse inputs.
@@ -18,10 +18,36 @@ function [Emag, params] = example2_adjoint(varargin)
         % Set up the optimization problem.
         %
 
-    E = solve_resonator([5, 5], zeros(25, 2), options.flatten);
+    % E = solve_resonator([5, 5], zeros(25, 2), options.flatten);
+    x0 = zeros(50, 1);
+    pc_size = [5 5];
+    fun = @(x) solve_resonator(pc_size, reshape(x, [25 2]), ...
+                                options.flatten, true);
+    fun1 = @(x) solve_resonator(pc_size, reshape(x, [25 2]), ...
+                                options.flatten, false);
+
+    search_options = optimset(  'Display', 'iter', ...
+                                'TolX', 1e-3, ...
+                                'Tolfun', 1e-6, ...
+                                'DerivativeCheck', 'off', ...
+                                'Diagnostics', 'on', ...
+                                'LargeScale', 'on', ...
+                                'MaxFunEvals', 1e3, ...
+                                'MaxIter', 1e3, ...
+                                'FunValCheck', 'on', ...
+                                'GradObj', 'on', ...
+                                'PlotFcns', {[]}, ...
+                                'OutputFcn', {[]});
+    
+    return 
+    % Perform the optimization.
+    [x, fval] = fminunc(fun, x0, search_options);
+
+
 end
 
-function [fval, df_dp, E, H, grid, eps] = solve_resonator(pc_size, shifts, flatten)
+function [fval, df_dp, E, H, grid, eps] = ...
+                    solve_resonator(pc_size, shifts, flatten, calc_grad)
 % Simulate a photonic crystal resonator.
 
         %
@@ -57,16 +83,21 @@ function [fval, df_dp, E, H, grid, eps] = solve_resonator(pc_size, shifts, flatt
         %
 
     E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
-    fval = norm(E_meas).^2; % This is the figure of merit.
+    fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
 
 
         % 
         % Calculate gradient.
         %
 
+    if ~calc_grad % Skip if not needed.
+        df_dp = nan;
+        return
+    end
+
     Egrad = my_default_field(grid.shape, 0); 
-    Egrad{2}(x, y, z) = E{2}(x, y, z);
-    Egrad{2}(x+1, y, z) = E{2}(x+1, y, z);
+    Egrad{2}(x, y, z) = -E{2}(x, y, z);
+    Egrad{2}(x+1, y, z) = -E{2}(x+1, y, z);
 
     function [eps] = make_eps(params)
         [~, eps] = make_resonator_structure(pc_size, params, flatten);
@@ -107,13 +138,16 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
 
     % Draw photonic crystal.
     pos = {};
+    cnt = 1;
     for i = 1 : pc_size(1)
         for j = 1 : pc_size(2)
-            p{1} = a * [(i-0.5) (j-0.5) 0] + [shifts(1) shifts(2)*(i~=1) 0];
+            p{1} = a * [(i-0.5) (j-0.5) 0] + ...
+                    [shifts(cnt, 1) shifts(cnt, 2) 0];
             p{2} = p{1} .* [-1 1 1];
             p{3} = p{1} .* [1 -1 1];
             p{4} = p{1} .* [-1 -1 1];
             pos = [pos, p];
+            cnt = cnt + 1;
         end
     end
 
