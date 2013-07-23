@@ -46,7 +46,7 @@ function test_structgrad()
     x0 = A(z0) \ b; 
     grad_test2(@(z)A(z)\b, (-A(z0)\B(x0))', z0)
     % Now using adjoint method.
-    dfdz_adj = real((-A(z0)' \ dfx(x0))' * B(x0));
+    dfdz_adj = real((-A(z0)' \ conj(dfx(x0)))' * B(x0));
 
     [dfdz(:), dfdz_adj(:)]
 

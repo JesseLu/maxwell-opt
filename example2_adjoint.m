@@ -18,13 +18,10 @@ function [fun, fun1, Emag, params] = example2_adjoint(varargin)
         % Set up the optimization problem.
         %
 
-    % E = solve_resonator([5, 5], zeros(25, 2), options.flatten);
-    x0 = zeros(50, 1);
-    pc_size = [5 5];
-    fun = @(x) solve_resonator(pc_size, reshape(x, [25 2]), ...
-                                options.flatten, true);
-    fun1 = @(x) solve_resonator(pc_size, reshape(x, [25 2]), ...
-                                options.flatten, false);
+    pc_size = [1 1];
+    x0 = zeros(2*prod(pc_size), 1); % Start with no shifts.
+    fun = @(x) solve_resonator(pc_size, x, options.flatten, true);
+    fun1 = @(x) solve_resonator(pc_size, x, options.flatten, false);
 
     search_options = optimset(  'Display', 'iter', ...
                                 'TolX', 1e-3, ...
@@ -39,6 +36,7 @@ function [fun, fun1, Emag, params] = example2_adjoint(varargin)
                                 'PlotFcns', {[]}, ...
                                 'OutputFcn', {[]});
     
+    fun(x0);
     return 
     % Perform the optimization.
     [x, fval] = fminunc(fun, x0, search_options);
@@ -49,41 +47,39 @@ end
 function [fval, df_dp, E, H, grid, eps] = ...
                     solve_resonator(pc_size, shifts, flatten, calc_grad)
 % Simulate a photonic crystal resonator.
+% Also return the structural gradient.
 
         %
-        % Build the structure.
+        % Simulate with a central current source.
         %
 
     [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
 
-
-        %
-        % Use a central point excitation.
-        %
-
+    % Use a central point excitation.
     [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
     x = x-1; % Slight adjustment.
     y = y-1;
     J{2}(x+[0 1], y, z) = 1;
 
-        
-        %
-        % Solve.
-        %
-
+    % Solve.
     if ~flatten; figure(2); end
     [E, H] = maxwell_solve(grid, eps, J);
 
-    figure(1);
-    maxwell_view(grid, eps, E, 'y', [nan nan 0]); % Visualize.
+    figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0]); % Visualize.
 
 
         % 
         % Measure power reflected back to the center (figure of merit).
         %
 
-    E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
-    fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
+    function [fval] = fitness(E)
+        E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
+        fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
+    end
+        
+%     E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
+%     fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
+    fval = fitness(E);
 
 
         % 
@@ -95,18 +91,26 @@ function [fval, df_dp, E, H, grid, eps] = ...
         return
     end
 
-    Egrad = my_default_field(grid.shape, 0); 
-    Egrad{2}(x, y, z) = -E{2}(x, y, z);
-    Egrad{2}(x+1, y, z) = -E{2}(x+1, y, z);
+    % Field gradient.
+    grad_E = my_default_field(grid.shape, 0); 
+    grad_E{2}(x, y, z) = -E{2}(x, y, z);
+    grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z);
 
+    % Function handle for creating the structure.
     function [eps] = make_eps(params)
         [~, eps] = make_resonator_structure(pc_size, params, flatten);
     end
 
-    df_dp = maxopt_structgrad(grid, eps, E, Egrad, @make_eps, shifts);
+    % Calculate the structural gradient.
+    df_dp = maxopt_gradients(grid, E, grad_E, shifts, @make_eps, ...
+                'fitness', @(eps) fitness(maxwell_solve(grid, eps, J)), ...
+                'check_gradients', true);
 end
 
+
+
 function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
+% Function to create a square lattice photonic crystal structure.
 
         %
         % Create grid.
@@ -137,6 +141,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
                         maxwell_box([0 0 0], [5.4 5.4 height]));
 
     % Draw photonic crystal.
+    shifts = reshape(shifts, [round(numel(shifts)/2) 2]);
     pos = {};
     cnt = 1;
     for i = 1 : pc_size(1)
@@ -154,14 +159,6 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
     for k = 1 : length(pos)
         eps = maxwell_shape(grid, eps, air_eps, ...
                             maxwell_cyl_smooth(pos{k}, radius, 2*height, ...
-                                                'smooth_dist', 0.025));
+                                                'smooth_dist', d));
     end
-
-%     if flatten
-%         subplot 211; maxwell_view(grid, eps, [], 'y', [nan 0 nan]);
-%     else
-%         subplot 111; maxwell_view(grid, eps, [], 'y', [nan nan height/4]);
-%         % subplot 222; maxwell_view(grid, eps, [], 'y', [nan 0 nan]);
-%     end
-
 end
