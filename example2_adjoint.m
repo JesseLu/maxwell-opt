@@ -18,14 +18,19 @@ function [Emag, params] = example2_adjoint(varargin)
         % Set up the optimization problem.
         %
 
-    P = solve_resonator([5, 5], zeros(25, 2), options.flatten);
-    P
+    E = solve_resonator([5, 5], zeros(25, 2), options.flatten);
+end
 
-
-function [P, E, H, grid, eps] = solve_resonator(pc_size, shifts, flatten)
+function [fval, df_dp, E, H, grid, eps] = solve_resonator(pc_size, shifts, flatten)
 % Simulate a photonic crystal resonator.
 
+        %
+        % Build the structure.
+        %
+
     [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
+
+
         %
         % Use a central point excitation.
         %
@@ -48,12 +53,27 @@ function [P, E, H, grid, eps] = solve_resonator(pc_size, shifts, flatten)
 
 
         % 
-        % Measure power reflected back to the center.
+        % Measure power reflected back to the center (figure of merit).
         %
 
-    [E{2}(x, y, z); E{2}(x+1, y, z)]
-    P = abs(E{2}(x, y, z));
+    E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
+    fval = norm(E_meas).^2; % This is the figure of merit.
 
+
+        % 
+        % Calculate gradient.
+        %
+
+    Egrad = my_default_field(grid.shape, 0); 
+    Egrad{2}(x, y, z) = E{2}(x, y, z);
+    Egrad{2}(x+1, y, z) = E{2}(x+1, y, z);
+
+    function [eps] = make_eps(params)
+        [~, eps] = make_resonator_structure(pc_size, params, flatten);
+    end
+
+    df_dp = maxopt_structgrad(grid, eps, E, Egrad, @make_eps, shifts);
+end
 
 function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
 
@@ -110,4 +130,4 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
 %         % subplot 222; maxwell_view(grid, eps, [], 'y', [nan 0 nan]);
 %     end
 
-
+end
