@@ -2,7 +2,7 @@
 % Derivative-based optimization of an H1 photonic crystal resonator.
 
 
-function [fun, fun1, Emag, params] = example2_adjoint(varargin)
+function [params, E, H, grid, eps] = example2_adjoint(varargin)
 
         %
         % Parse inputs.
@@ -10,6 +10,7 @@ function [fun, fun1, Emag, params] = example2_adjoint(varargin)
 
     options = my_parse_options(struct(  'delta', 0.5 * [0 ones(1, 5)], ... 
                                         'width', 0.1 * ones(1, 6), ...
+                                        'sim_only', false, ...
                                         'flatten', false), ...
                                 varargin, mfilename);
 
@@ -18,29 +19,41 @@ function [fun, fun1, Emag, params] = example2_adjoint(varargin)
         % Set up the optimization problem.
         %
 
-    pc_size = [1 1];
-    x0 = zeros(2*prod(pc_size), 1); % Start with no shifts.
+    pc_size = [3 3];
+    x = zeros(2*prod(pc_size), 1); % Start with no shifts.
     fun = @(x) solve_resonator(pc_size, x, options.flatten, true);
-    fun1 = @(x) solve_resonator(pc_size, x, options.flatten, false);
 
-    search_options = optimset(  'Display', 'iter', ...
-                                'TolX', 1e-3, ...
-                                'Tolfun', 1e-6, ...
-                                'DerivativeCheck', 'off', ...
-                                'Diagnostics', 'on', ...
-                                'LargeScale', 'on', ...
-                                'MaxFunEvals', 1e3, ...
-                                'MaxIter', 1e3, ...
-                                'FunValCheck', 'on', ...
-                                'GradObj', 'on', ...
-                                'PlotFcns', {[]}, ...
-                                'OutputFcn', {[]});
-    
-    fun(x0);
-    return 
-    % Perform the optimization.
-    [x, fval] = fminunc(fun, x0, search_options);
+    function vis_progress(hist)
+        figure(2);
+        plot(hist, '.-');
+        xlabel('optimization iterations');
+        ylabel('fval');
+        title('structure optimization progress');
+    end
 
+    if ~options.sim_only
+        search_options = optimset(  'Display', 'iter', ...
+                                    'TolX', 1e-6, ...
+                                    'Tolfun', 1e-6, ...
+                                    'DerivativeCheck', 'off', ...
+                                    'Diagnostics', 'on', ...
+                                    'LargeScale', 'on', ...
+                                    'MaxFunEvals', 1e3, ...
+                                    'MaxIter', 1e3, ...
+                                    'FunValCheck', 'on', ...
+                                    'GradObj', 'off', ...
+                                    'TypicalX', 1e-3 + ones(size(x)), ...
+                                    'PlotFcns', {[]}, ...
+                                    'OutputFcn', {[]});
+        
+        
+        [x, fval, hist] = my_grad_descent(fun, x,  'init_step', 0.1, ...
+                                                    'max_delta', 0.1, ...
+                                                    'vis_progress', @vis_progress);
+    end
+
+    [~, ~, E, H, grid, eps] = solve_resonator(pc_size, x, options.flatten, false);
+    params = reshape(x, [round(length(x)/2) 2]);
 
 end
 
@@ -48,6 +61,17 @@ function [fval, df_dp, E, H, grid, eps] = ...
                     solve_resonator(pc_size, shifts, flatten, calc_grad)
 % Simulate a photonic crystal resonator.
 % Also return the structural gradient.
+
+        %
+        % Sanity check for shifts.
+        %
+
+    if any(abs(shifts) > 3.2) % Check for shifts which are way too large.
+        fval = 1e9;
+        df_dp = -1e9 * shifts;
+        return
+    end
+
 
         %
         % Simulate with a central current source.
@@ -58,14 +82,14 @@ function [fval, df_dp, E, H, grid, eps] = ...
     % Use a central point excitation.
     [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
     x = x-1; % Slight adjustment.
-    y = y-1;
+    y = y;
     J{2}(x+[0 1], y, z) = 1;
 
     % Solve.
-    if ~flatten; figure(2); end
+    if ~flatten; figure(3); end
     [E, H] = maxwell_solve(grid, eps, J);
 
-    figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0]); % Visualize.
+    figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0], 'field_phase', nan); % Visualize.
 
 
         % 
@@ -75,6 +99,7 @@ function [fval, df_dp, E, H, grid, eps] = ...
     function [fval] = fitness(E)
         E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
         fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
+        fval = -norm(E_meas); % This is the figure of merit.
     end
         
 %     E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
@@ -93,8 +118,9 @@ function [fval, df_dp, E, H, grid, eps] = ...
 
     % Field gradient.
     grad_E = my_default_field(grid.shape, 0); 
-    grad_E{2}(x, y, z) = -E{2}(x, y, z);
-    grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z);
+    a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
+    grad_E{2}(x, y, z) = -E{2}(x, y, z) / a;
+    grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / a;
 
     % Function handle for creating the structure.
     function [eps] = make_eps(params)
@@ -102,9 +128,10 @@ function [fval, df_dp, E, H, grid, eps] = ...
     end
 
     % Calculate the structural gradient.
+    if ~flatten; figure(3); end
     df_dp = maxopt_gradients(grid, E, grad_E, shifts, @make_eps, ...
                 'fitness', @(eps) fitness(maxwell_solve(grid, eps, J)), ...
-                'check_gradients', true);
+                'check_gradients', false);
 end
 
 
@@ -119,9 +146,9 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
     % Make a grid for a wavelength of 1550 nm.
     d = 0.05;
     if flatten
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -3.2:d:3.2, -3.2:d:3.2, 0); % 2D.
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2:d:2, -2:d:2, 0); % 2D.
     else
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -3.2:d:3.2, -3.2:d:3.2, -1.5:d:1.5);
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2:d:2, -2:d:2, -1.5:d:1.5);
     end
 
 
@@ -130,7 +157,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
         %
 
     % Structure constants.
-    height = 0.3;
+    height = 0.4;
     radius = 0.15;
     a = 0.5;
     si_eps = 13;
@@ -138,7 +165,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
 
     % Draw slab.
     eps = maxwell_shape(grid, eps, si_eps, ...
-                        maxwell_box([0 0 0], [5.4 5.4 height]));
+                        maxwell_box([0 0 0], [inf inf height]));
 
     % Draw photonic crystal.
     shifts = reshape(shifts, [round(numel(shifts)/2) 2]);

@@ -61,14 +61,20 @@ function [struct_grad, omega_grad] = ...
         %
 
     % Initiate solve.
+    fprintf('[start adjoint solve] ');
     cb = solve_A_dagger(z0, grad_x0);
 
     % Find the dz/dp derivative.
+    progress_text = '';
     for k = 1 : numel(params0) 
         p = params0;
         p(k) = p(k) + options.delta_p;
         z = p2z(p);
         grad_p(:, k) = sparse((z - z0) ./ options.delta_p);
+
+        fprintf(repmat('\b', 1, length(progress_text)));
+        progress_text = sprintf('[%d/%d gradients computed] ', k, numel(params0));
+        fprintf(progress_text);
     end
 
     % Obtain result from dagger solve.
@@ -77,7 +83,8 @@ function [struct_grad, omega_grad] = ...
     y = vec(y);
 
     grad_z = -y' * B; % Form the df/dz derivative.
-    struct_grad = grad_z * grad_p; % Form the structural gradient.
+    df_dp = grad_z * grad_p; % Form the structural gradient.
+    struct_grad = real(df_dp).';
     omega_grad = nan;
 
     if options.check_gradients
@@ -92,7 +99,7 @@ function [struct_grad, omega_grad] = ...
             grad_test(@(z) options.fitness(unvec(z)), grad_z, z0, true);
 
             % Check struct_grad.
-            grad_test(@(p) options.fitness(unvec(p2z(p))), struct_grad, params0, true);
+            grad_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, true);
         end
 
 %         % Check equivalence of Ax-b and Bz-d.
