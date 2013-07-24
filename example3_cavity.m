@@ -1,8 +1,8 @@
-%% example2_adjoint
-% Form a cavity out of a square lattice using gradient optimization.
+%% example3_cavity
+% Derivative-based optimization of an L3 cavity mode.
 
 
-function [params, E, H, grid, eps] = example2_adjoint(varargin)
+function [params, E, H, grid, eps] = example3_cavity(varargin)
 
         %
         % Parse inputs.
@@ -19,7 +19,7 @@ function [params, E, H, grid, eps] = example2_adjoint(varargin)
         % Set up the optimization problem.
         %
 
-    pc_size = [3 3];
+    pc_size = [6 5];
     x = zeros(2*prod(pc_size), 1); % Start with no shifts.
     fun = @(x) solve_resonator(pc_size, x, options.flatten, true);
 
@@ -79,6 +79,8 @@ function [fval, df_dp, E, H, grid, eps] = ...
 
     [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
 
+    maxwell_view(grid, eps, [], 'y', [nan nan 0]);
+    pause
     % Use a central point excitation.
     [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
     x = x-1; % Slight adjustment.
@@ -144,11 +146,11 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
         %
 
     % Make a grid for a wavelength of 1550 nm.
-    d = 0.05;
+    d = 0.025;
     if flatten
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2:d:2, -2:d:2, 0); % 2D.
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2.6:d:2.6, -2:d:2, 0); % 2D.
     else
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2:d:2, -2:d:2, -1.5:d:1.5);
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2.6:d:2.6, -2:d:2, -1.5:d:1.5);
     end
 
 
@@ -157,9 +159,11 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
         %
 
     % Structure constants.
-    height = 0.4;
-    radius = 0.15;
-    a = 0.5;
+    height = 0.24;
+    radius = 0.12;
+    a = 0.4;
+    a1 = [1 0 0];
+    a2 = [-0.5 sqrt(3)/2 0];
     si_eps = 13;
     air_eps = 1;
 
@@ -171,21 +175,43 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
     shifts = reshape(shifts, [round(numel(shifts)/2) 2]);
     pos = {};
     cnt = 1;
-    for i = 1 : pc_size(1)
-        for j = 1 : pc_size(2)
-            p{1} = a * [(i-0.5) (j-0.5) 0] + ...
+    for i = 0 : pc_size(1)-1
+        for j = 0 : pc_size(2)-1
+            p{1} = a * ((i+floor(j/2))*a1 + j*a2) + ...
                     [shifts(cnt, 1) shifts(cnt, 2) 0];
-            p{2} = p{1} .* [-1 1 1];
-            p{3} = p{1} .* [1 -1 1];
-            p{4} = p{1} .* [-1 -1 1];
+
+            if p{1}(1) < 0 % Skip.
+                continue
+            end
+
+            if p{1}(1) == 0
+                p{2} = [];
+            else
+                p{2} = p{1} .* [-1 1 1];
+            end
+
+            if p{1}(2) == 0
+                p{3} = [];
+            else
+                p{3} = p{1} .* [1 -1 1];
+            end
+
+            if p{1}(1) == 0 || p{1}(2) == 0
+                p{4} = [];
+            else
+                p{4} = p{1} .* [-1 -1 1];
+            end
+
             pos = [pos, p];
             cnt = cnt + 1;
         end
     end
 
     for k = 1 : length(pos)
-        eps = maxwell_shape(grid, eps, air_eps, ...
-                            maxwell_cyl_smooth(pos{k}, radius, 2*height, ...
-                                                'smooth_dist', d));
+        if ~isempty(pos{k})
+            eps = maxwell_shape(grid, eps, air_eps, ...
+                                maxwell_cyl_smooth(pos{k}, radius, 2*height, ...
+                                                    'smooth_dist', 3*d));
+        end
     end
 end
