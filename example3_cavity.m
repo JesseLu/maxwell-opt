@@ -74,24 +74,43 @@ function [fval, df_dp, E, H, grid, eps] = ...
 
 
         %
-        % Simulate with a central current source.
+        % Solve the eigenmode.
         %
 
-    [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
+    if flatten
+        [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
 
-    maxwell_view(grid, eps, [], 'y', [nan nan 0]);
-    pause
+        % Use a central point excitation.
+        [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
+        x = x-1; % Slight adjustment.
+        y = y;
+        J{2}(x+[0 1], y, z) = 1;
+
+        [E, H] = maxwell_solve(grid, eps, J);
+        [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E);
+    
+    else % If 3D recursively use 
+
+        [fval, df_dp, E, H, grid, eps] = ...
+                    solve_resonator(pc_size, shifts, flatten, calc_grad)
+        [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E);
+
+
+
     % Use a central point excitation.
     [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
     x = x-1; % Slight adjustment.
     y = y;
     J{2}(x+[0 1], y, z) = 1;
+    end
 
-    % Solve.
-    if ~flatten; figure(3); end
-    [E, H] = maxwell_solve(grid, eps, J);
-
+        % maxwell_view(grid, eps, [], 'y', [nan nan 0]);
+%     % Solve.
+%     if ~flatten; figure(3); end
+%     [E, H] = maxwell_solve(grid, eps, J);
+% 
     figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0], 'field_phase', nan); % Visualize.
+    pause
 
 
         % 
@@ -148,7 +167,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
     % Make a grid for a wavelength of 1550 nm.
     d = 0.025;
     if flatten
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2.6:d:2.6, -2:d:2, 0); % 2D.
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.60, -2.6:d:2.6, -2:d:2, 0); % 2D.
     else
         [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2.6:d:2.6, -2:d:2, -1.5:d:1.5);
     end
@@ -184,6 +203,10 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
                 continue
             end
 
+            if (i == 0 || i == 1) && j == 0 % Skip the 3 holes to be removed.
+                continue
+            end
+
             if p{1}(1) == 0
                 p{2} = [];
             else
@@ -211,7 +234,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
         if ~isempty(pos{k})
             eps = maxwell_shape(grid, eps, air_eps, ...
                                 maxwell_cyl_smooth(pos{k}, radius, 2*height, ...
-                                                    'smooth_dist', 3*d));
+                                                    'smooth_dist', d));
         end
     end
 end

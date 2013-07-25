@@ -1,6 +1,10 @@
+%% my_grad_descent
+% Simple gradient descent algorithm 
+
 function [x, fval, hist] = my_grad_descent(fun, x0, varargin)
 
     
+    % Parse options.
     options = my_parse_options(struct(  'init_step', 1, ...
                                         'max_delta', 1, ...
                                         'step_shrink', 0.5, ...
