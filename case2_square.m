@@ -1,0 +1,175 @@
+%% case2_square
+% Sets up a square photonic crystal resonator design problem.
+
+function [fun, x0] = case2_square(type, varargin)
+
+        %
+        % Parse inputs.
+        %
+
+    validateattributes(type, {'char'}, {'vector'}, 'type', mfilename);
+
+    options = my_parse_options(struct(  'flatten', false), ...
+                                varargin, mfilename);
+
+
+        %
+        % Return recommended starting parameters.
+        %
+
+    pc_size = [3 3]; % Actually turns out to be a symmetric 6x6 crystal.
+    x0 = zeros(2*prod(pc_size), 1); % Start with no shifts.
+
+
+        %
+        % Return appropriate function handle.
+        %
+        
+    function [E, H, grid, eps] = get_fields(varargin)
+        [~, ~, E, H, grid, eps] = solve_resonator(varargin{:});
+    end
+
+    switch type
+        case 'get_fields'
+            fun = @(x) get_fields(pc_size, x, options.flatten, false);
+        case 'fval'
+            fun = @(x) solve_resonator(pc_size, x, options.flatten, false);
+        case 'grad_f'
+            fun = @(x) solve_resonator(pc_size, x, options.flatten, true);
+        otherwise
+            error('Invalid type.');
+    end
+end
+
+function [fval, grad_f, E, H, grid, eps] = ...
+                    solve_resonator(pc_size, shifts, flatten, calc_grad)
+% Simulate a photonic crystal resonator.
+% Also return the structural gradient.
+
+        %
+        % Sanity check for shifts.
+        %
+
+    if any(abs(shifts) > 3.2) % Check for shifts which are way too large.
+        fval = 1e9;
+        df_dp = -1e9 * shifts;
+        return
+    end
+
+
+        %
+        % Simulate with a central current source.
+        %
+
+    [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
+
+    % Use a central point excitation.
+    [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
+    x = x-1; % Slight adjustment.
+    y = y;
+    J{2}(x+[0 1], y, z) = 1;
+
+    % Solve.
+    if ~flatten; figure(3); end
+    [E, H] = maxwell_solve(grid, eps, J);
+
+    figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0], 'field_phase', nan); % Visualize.
+
+
+        % 
+        % Measure power reflected back to the center (figure of merit).
+        %
+
+    function [fval] = fitness(E)
+        E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
+        fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
+        fval = -norm(E_meas); % This is the figure of merit.
+    end
+        
+%     E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
+%     fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
+    fval = fitness(E);
+
+
+        % 
+        % Calculate gradient.
+        %
+
+    if ~calc_grad % Skip if not needed.
+        grad_f = nan;
+        return
+    end
+
+    % Field gradient.
+    grad_E = my_default_field(grid.shape, 0); 
+    a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
+    grad_E{2}(x, y, z) = -E{2}(x, y, z) / a;
+    grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / a;
+
+    % Function handle for creating the structure.
+    function [eps] = make_eps(params)
+        [~, eps] = make_resonator_structure(pc_size, params, flatten);
+    end
+
+    % Calculate the structural gradient.
+    if ~flatten; figure(3); end
+    grad_f = maxopt_solve_gradient(grid, E, grad_E, shifts, @make_eps, ...
+                'fitness', @(eps) fitness(maxwell_solve(grid, eps, J)), ...
+                'check_gradients', false);
+end
+
+
+
+function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
+% Function to create a square lattice photonic crystal structure.
+
+        %
+        % Create grid.
+        %
+
+    % Make a grid for a wavelength of 1550 nm.
+    d = 0.05;
+    if flatten
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2:d:2, -2:d:2, 0); % 2D.
+    else
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2:d:2, -2:d:2, -1.5:d:1.5);
+    end
+
+
+        %
+        % Setup the structure.
+        %
+
+    % Structure constants.
+    height = 0.4;
+    radius = 0.15;
+    a = 0.5;
+    si_eps = 13;
+    air_eps = 1;
+
+    % Draw slab.
+    eps = maxwell_shape(grid, eps, si_eps, ...
+                        maxwell_box([0 0 0], [inf inf height]));
+
+    % Draw photonic crystal.
+    shifts = reshape(shifts, [round(numel(shifts)/2) 2]);
+    pos = {};
+    cnt = 1;
+    for i = 1 : pc_size(1)
+        for j = 1 : pc_size(2)
+            p{1} = a * [(i-0.5) (j-0.5) 0] + ...
+                    [shifts(cnt, 1) shifts(cnt, 2) 0];
+            p{2} = p{1} .* [-1 1 1];
+            p{3} = p{1} .* [1 -1 1];
+            p{4} = p{1} .* [-1 -1 1];
+            pos = [pos, p];
+            cnt = cnt + 1;
+        end
+    end
+
+    for k = 1 : length(pos)
+        eps = maxwell_shape(grid, eps, air_eps, ...
+                            maxwell_cyl_smooth(pos{k}, radius, 2*height, ...
+                                                'smooth_dist', d));
+    end
+end

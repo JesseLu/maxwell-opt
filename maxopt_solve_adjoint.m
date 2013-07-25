@@ -1,17 +1,14 @@
-%% maxopt_solveAT
+%% maxopt_solve_adjoint
 % Asynchronously solve for the adjoint of the operator.
 
 %%% Description
 % Really just a simple wrapper around maxwell_solve_async.
 %
-% This works via 
-% $ A^\dagger y = A^\dagger S^\ast A^{-\ast} S^{-\ast} A^\dagger y $
-% where the diagonal symmetrization matrix $S$ has the property 
-% $ SA = A^T S$.
+% This works via a symmetrization matrix S.
 %
 
 
-function [cb] = maxopt_solveAT(grid, eps_mu, J, varargin)
+function [cb] = maxopt_solve_adjoint(grid, eps_mu, J, varargin)
 
         %
         % Validate and parse inputs.

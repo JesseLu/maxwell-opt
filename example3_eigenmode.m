@@ -1,8 +1,8 @@
-%% example3_cavity
+%% example3_eigenmode
 % Derivative-based optimization of an L3 cavity mode.
 
 
-function [params, E, H, grid, eps] = example3_cavity(varargin)
+function [params, E, H, grid, eps] = example3_eigenmode(varargin)
 
         %
         % Parse inputs.

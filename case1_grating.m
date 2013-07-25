@@ -1,61 +1,59 @@
-%% example1_brutesearch
-% Derivative-free optimization of a nanophotonic grating coupler.
+%% case1_grating
+% Sets up a grating coupler optimization problem.
 
-
-function [efficiency, delta, width] = example1_brutesearch(varargin)
+function [fun, x0] = case1_grating(type, varargin)
 
         %
         % Parse inputs.
         %
 
-    options = my_parse_options(struct(  'delta', 0.5 * [0 ones(1, 5)], ... 
-                                        'width', 0.1 * ones(1, 6), ...
-                                        'flatten', false), ...
+    validateattributes(type, {'char'}, {'vector'}, 'type', mfilename);
+
+    options = my_parse_options(struct(  'flatten', false), ...
                                 varargin, mfilename);
 
+
+        %
+        % Return recommended starting parameters.
+        %
+
+    delta0 = 0.5 * [0 ones(1, 5)]; % Spacings.
+    width0 = 0.1 * ones(1, 6); % Widths.
+    x0 = [delta0(:); width0(:)];
+
+
+        %
+        % Calculate input power.
+        % 
+
+    P_in = abs(solve_grating([], options.flatten, 1, false));
+
+        %
+        % Return appropriate function handle.
+        %
         
-        %
-        % Set up the optimization problem.
-        %
+    function [E, H, grid, eps] = get_fields(varargin)
+        [~, ~, E, H, grid, eps] = solve_grating(varargin{:});
+    end
 
-    % Get the input power
-    fprintf('Calculating input power... ');
-    P_in = solve_grating([], [], options.flatten);
-    fprintf('Input power: %e\n', P_in);
-
-    n = length(options.delta);
-    fun = @(x)  -1/P_in * solve_grating(x(1:n), x(n+1:end), options.flatten);
-    x0 = [options.delta(:); options.width(:)];
-    search_options = optimset(  'Display', 'iter', ...
-                                'TolX', 0.05, ...
-                                'Tolfun', 1e-16, ...
-                                'MaxFunEvals', 1e3, ...
-                                'MaxIter', 1e3, ...
-                                'FunValCheck', 'on', ...
-                                'PlotFcns', {[]}, ...
-                                'OutputFcn', {[]});
-
-    % Perform the optimization.
-    [x, fval] = fminsearch(fun, x0, search_options);
-
-
-        %
-        % Get the result.
-        %
-
-    delta = x(1:n);
-    width = x(n+1:end);
-    efficiency = -fval;
-    
-        
-
-
-
+    switch type
+        case 'get_fields'
+            fun = @(x) get_fields(x, options.flatten, P_in, false);
+        case 'fval'
+            fun = @(x) solve_grating(x, options.flatten, P_in, false);
+        case 'grad_f'
+            fun = @(x) solve_grating(x, options.flatten, P_in, true);
+        otherwise
+            error('Invalid type.');
+    end
 end
 
-
-function [P, E, H, grid, eps] = solve_grating(delta, width, flatten)
+function [fval, grad_f, E, H, grid, eps] = solve_grating(params, flatten, P_in, calc_grad)
 % Simulate a grating coupler.
+
+    n_2 = round(length(params)/2);
+    delta = params(1:n_2);
+    width = params(n_2+1:end);
 
     if isempty(delta) && isempty(width)
         no_struct = true;
@@ -98,7 +96,7 @@ function [P, E, H, grid, eps] = solve_grating(delta, width, flatten)
 
     % Draw half-trenches.
     x_curr = 0;
-    for k = 1 : length(delta)
+    for k = 1 : n_2
         x_curr = x_curr + abs(delta(k));
         eps = maxwell_shape(grid, eps, air_eps, ...
                     maxwell_box_smooth( [-x_curr 0 height/2], ...
@@ -149,4 +147,7 @@ function [P, E, H, grid, eps] = solve_grating(delta, width, flatten)
         [~, E1, H1] = maxwell_wgmode(grid, eps, [2.5 0 0], [+inf 2 2]);
         P = maxwell_flux(grid, [E H], [E1 H1]);
     end
+
+    fval = -P / P_in;
+    grad_f = [];
 end

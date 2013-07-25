@@ -1,10 +1,10 @@
-%% example0_paramsweep
+%% example0_sweep
 % Sweep the parameters of a waveguide-coupled disk resonator structure.
 
 %%% Description
 % Note that this example is especially tuned for the 2D, flattened case.
 
-function [gap, radius, P] = example0_paramsweep(varargin)
+function [gap, radius, P] = example0_sweep(varargin)
 
         %
         % Parse inputs.
