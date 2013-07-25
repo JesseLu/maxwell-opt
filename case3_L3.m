@@ -80,7 +80,7 @@ function [fval, df_dp, omega, E, H, grid, eps] = ...
     end
 
     [E, H] = maxwell_solve(grid, eps, J);
-    [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E);
+    [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
 
     figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0], 'field_phase', nan); % Visualize.
 
@@ -141,7 +141,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
     if flatten
         [grid, eps, ~, J] = maxwell_grid(2*pi/1.911, -2.6:d:2.6, -2:d:2, 0); % 2D.
     else
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, -2.6:d:2.6, -2:d:2, -1.5:d:1.5);
+        [grid, eps, ~, J] = maxwell_grid(2*pi/1.583, -2.6:d:2.6, -2:d:2, -1.5:d:1.5);
     end
 
 

@@ -80,19 +80,28 @@ function [fval, grad_f, E, H, grid, eps] = ...
         % Measure power reflected back to the center (figure of merit).
         %
 
-    function [fval] = fitness(E)
+    function [fval, grad_E] = fitness(E)
+    % Calculates figure of merit and its derivative.
         E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
-        fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
-        fval = -norm(E_meas); % This is the figure of merit.
+        fval = -sum(abs(E_meas)); % This is the figure of merit.
+
+        % Field gradient.
+        grad_E = my_default_field(grid.shape, 0); 
+        a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
+        grad_E{2}(x, y, z) = -E{2}(x, y, z) / abs(E{2}(x, y, z));
+        grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / abs(E{2}(x+1, y, z));
     end
         
-%     E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
-%     fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
-    fval = fitness(E);
+    [fval, grad_E] = fitness(E);
+
+%     % Use to check that grad_E matches the fitness function.
+%     [vec, unvec] = my_vec(grid.shape);
+%     my_gradient_test(@(x) fitness(unvec(x)), vec(grad_E).', vec(E), true, 'df/dx');
+%     pause
 
 
         % 
-        % Calculate gradient.
+        % Calculate structural gradient.
         %
 
     if ~calc_grad % Skip if not needed.
@@ -100,14 +109,8 @@ function [fval, grad_f, E, H, grid, eps] = ...
         return
     end
 
-    % Field gradient.
-    grad_E = my_default_field(grid.shape, 0); 
-    a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
-    grad_E{2}(x, y, z) = -E{2}(x, y, z) / a;
-    grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / a;
-
-    % Function handle for creating the structure.
     function [eps] = make_eps(params)
+    % Function handle for creating the structure.
         [~, eps] = make_resonator_structure(pc_size, params, flatten);
     end
 

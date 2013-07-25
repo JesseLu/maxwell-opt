@@ -92,14 +92,17 @@ function [struct_grad, omega_grad] = ...
         A = maxwell_axb(grid, unvec(z0), E, E);
         fprintf('Error from A_dagger solve: %e\n', norm(A'*y - grad_x0));
 
-        grad_test(p2z, grad_p, params0, false) % Test grad_p (dz/dp).
+        my_gradient_test(p2z, grad_p, params0, false, 'dz/dp') % Test grad_p (dz/dp).
 
         if ~isempty(options.fitness)
             % Check grad_z.
-            grad_test(@(z) options.fitness(unvec(z)), grad_z, z0, true);
+            my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
+
+            % Check grad_z.
+            my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
 
             % Check struct_grad.
-            grad_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, true);
+            my_gradient_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, true, 'df/dp');
         end
 
 %         % Check equivalence of Ax-b and Bz-d.
@@ -115,17 +118,3 @@ function [struct_grad, omega_grad] = ...
 %         fprintf('Error between Ax-b and Bz-d: %e\n', norm(res1 - res2)/norm(res1));
     end
 
-function grad_test(fun, grad_x, x0, use_real)
-   
-    delta = 1e-6;
-    f0 = fun(x0); 
-    for k = 1 : 10
-        dx = delta * randn(size(x0));
-        diff1 = fun(x0+dx) - f0;
-        diff2 = (grad_x * dx);
-        if use_real
-            diff2 = real(diff2);
-        end
-        err(k) = norm(diff1(:) - diff2(:)) / norm(diff1(:));
-    end
-    fprintf('Max error: %e\n', max(err));
