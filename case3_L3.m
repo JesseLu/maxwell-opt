@@ -147,8 +147,9 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
 
     % Calculate the structural gradient.
     if ~flatten; figure(3); end
-    grid.omega = (omega);
+    grid.omega = 1.00 * (omega);
     grad_f = maxopt_solve_gradient(grid, E, grad_E, shifts, @make_eps, ...
+                'eigenmode', true, ...
                 'fitness', @solve_fitness, ...
                 'check_gradients', true);
 end
@@ -204,11 +205,11 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
     % Draw photonic crystal.
     shifts = reshape(shifts, [round(numel(shifts)/2) 2]);
     pos = {};
-    cnt = 1;
+    cnt = 0;
     for i = 0 : pc_size(1)-1
         for j = 0 : pc_size(2)-1
-            p{1} = a * ((i+floor(j/2))*a1 + j*a2) + ...
-                    [shifts(cnt, 1) shifts(cnt, 2) 0];
+            cnt = cnt + 1;
+            p{1} = a * ((i+floor(j/2))*a1 + j*a2);
 
             if p{1}(1) < 0 % Skip.
                 continue
@@ -216,6 +217,14 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
 
             if (i == 0 || i == 1) && j == 0 % Skip the 3 holes to be removed.
                 continue
+            end
+            
+            if p{1}(1) ~= 0
+                p{1}(1) = p{1}(1) + shifts(cnt, 1); % Add shift.
+            end
+
+            if p{1}(2) ~= 0
+                p{1}(2) = p{1}(2) + shifts(cnt, 2); % Add shift.
             end
 
             if p{1}(1) == 0
@@ -237,7 +246,6 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
             end
 
             pos = [pos, p];
-            cnt = cnt + 1;
         end
     end
 
@@ -245,7 +253,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
         if ~isempty(pos{k})
             eps = maxwell_shape(grid, eps, air_eps, ...
                                 maxwell_cyl_smooth(pos{k}, radius, 2*height, ...
-                                                    'smooth_dist', d));
+                                                    'smooth_dist', 2*d));
         end
     end
 end
