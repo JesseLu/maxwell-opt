@@ -68,12 +68,10 @@ function [struct_grad, omega_grad] = ...
         % Find the derivative.
         %
 
-    % Initiate solve.
-    fprintf('[start adjoint solve] ');
-    if options.eigenmode
-        grad_x0 = filter_field(x0, grad_x0);
+    if ~options.eigenmode % Initiate solve for non-eigenmode gradient.
+        fprintf('[start adjoint solve] ');
+        cb = solve_A_dagger(z0, grad_x0);
     end
-    cb = solve_A_dagger(z0, grad_x0);
 
     % Find the dz/dp derivative.
     progress_text = '';
@@ -92,20 +90,68 @@ function [struct_grad, omega_grad] = ...
 %         pause
     end
 
-    % Obtain result from dagger solve.
-    while ~cb(); end
-    [~, y] = cb();
-    y = vec(y);
+    if ~options.eigenmode % Obtain result from dagger solve (non-eigenmode).
+        while ~cb(); end
+        [~, y] = cb();
+        y = vec(y);
 
-    if options.eigenmode
+        grad_z = -y' * B; % Form the df/dz derivative.
+        df_dp = grad_z * grad_p; % Form the structural gradient.
+        grad = real(df_dp).';
+
+
+        if options.check_gradients
+            % Check result of the dagger solve.
+            A = maxwell_axb(grid, unvec(z0), E, E);
+            fprintf('Error from A_dagger solve: %e\n', norm(A'*y - grad_x0));
+
+            my_gradient_test(p2z, grad_p, params0, false, 'dz/dp') % Test grad_p (dz/dp).
+
+            if ~isempty(options.fitness)
+                % Check grad_z.
+                my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
+
+                % Check struct_grad.
+                my_gradient_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, true, 'df/dp');
+            end
+
+%             % Check equivalence of Ax-b and Bz-d.
+%             z0 = p2z(params0);
+%             x0 = vec(E);
+%             multA = maxwell_axb(grid, unvec(z0), E, E, 'functional', true);
+%             b = randn(N, 1);
+%             d = b - (multA(x0) + grid.omega^2 * (z0 .* x0));
+%     
+%             res1 = multA(x0) - b;
+%             res2 = B * z0 - d;
+%     
+%             fprintf('Error between Ax-b and Bz-d: %e\n', norm(res1 - res2)/norm(res1));
+        end
+
+    else % Eigenmode.
         left_ew = my_left_eigenvector(grid, x0); % Get left eigenvector.
-        y = filter_field(left_ew, y);
+        dlambda_dz = left_ew' * B;
+        my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
     end
 
-    grad_z = -y' * B; % Form the df/dz derivative.
-    df_dp = grad_z * grad_p; % Form the structural gradient.
-    struct_grad = real(df_dp).';
-    omega_grad = nan;
+
+
+        %
+        % Calculate the gradient with respect to omega.
+        %
+
+    if options.eigenmode
+        A = maxwell_axb(grid, unvec(z0), unvec(x0), unvec(x0), 'functional', true);
+        dlambda_dz = left_ew' * A(x0);
+        my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
+        dlambda_dp = dlambda_dz * grad_p;
+        omega_grad = nan;
+    end
+
+
+        %
+        % Check gradients.
+        %
 
     if options.check_gradients
         % Check result of the dagger solve.

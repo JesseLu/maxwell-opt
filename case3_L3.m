@@ -110,30 +110,16 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
         %
 
     [vec, unvec] = my_vec(grid.shape);
-    function [fval, grad_E] = fitness(E)
+    function [fval, grad_w] = fitness(w)
     % Calculates figure of merit and its derivative.
-        fval = -abs(E{2}(x,y,z)); % This is the figure of merit.
-%         fval = -abs(E{2}(x,y,z)) / norm(vec(E))^2; % This is the figure of merit.
-%         fval = 1 / norm(vec(E))^2; % This is the figure of merit.
-        fval = 0.5 * norm(vec(E))^2; % This is the figure of merit.
-
-        % Field gradient.
-        grad_E = my_default_field(grid.shape, 0); 
-        % grad_E = unvec(abs(E{2}(x,y,z)) * 2 * norm(vec(E))^-4 * (vec(E)));
-        % grad_E = unvec(2 * norm(vec(E))^-4 * (vec(E)));
-        % grad_E = unvec(1 * conj(vec(E)));
-        % grad_E{2}(x,y,z) = grad_E{2}(x,y,z) - (E{2}(x,y,z)) / abs(E{2}(x,y,z)) / norm(vec(E))^2;
-        % grad_E{2}(x,y,z) = -(E{2}(x,y,z)) / abs(E{2}(x,y,z));
-        grad_E = unvec(1 * (vec(E)));
+        fval = 0.5 * norm(w)^2;
+        grad_w = w;
     end
         
-    N = 3 * prod(grid.shape);
-    E = unvec(randn(N, 1) + 1i * randn(N, 1));
-    [fval, grad_E] = fitness(E);
+    [fval, grad_w] = fitness(omega);
 
     % Use to check that grad_E matches the fitness function.
-    my_gradient_test(@(x) fitness(unvec(x)), vec(grad_E).', vec(E), true, 'df/dx');
-    pause
+    my_gradient_test(@(w) fitness(w), grad_w, omega, true, 'df/dw');
 
 
         % 
@@ -150,18 +136,17 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
         [~, eps] = make_resonator_structure(pc_size, params, flatten);
     end
 
-    function [fval] = solve_fitness(eps)
+    function [lambda] = solver(eps)
     % Function that evaluates the fitness based on eps.
         [omega_fit, E_fit, H_fit] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
-        fval = fitness(E_fit);
+        lambda = omega_fit^2;
     end
 
     % Calculate the structural gradient.
     if ~flatten; figure(3); end
-    grid.omega = 1.00 * (omega);
-    grad_f = maxopt_solve_gradient(grid, E, grad_E, shifts, @make_eps, ...
-                'eigenmode', true, ...
-                'fitness', @solve_fitness, ...
+    grad_f = maxopt_solve_gradW(grid, omega, E, grad_w, shifts, @make_eps, ...
+                'solver', @solver, ...
+                'fitness', @fitness, ...
                 'check_gradients', true);
 end
 
