@@ -52,7 +52,7 @@ function [fval, grad_f, E, H, grid, eps] = ...
 
     if any(abs(shifts) > 3.2) % Check for shifts which are way too large.
         fval = 1e9;
-        df_dp = -1e9 * shifts;
+        grad_f = -1e9 * shifts;
         return
     end
 

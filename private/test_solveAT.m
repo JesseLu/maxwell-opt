@@ -17,14 +17,16 @@ function [] = test_solveAT(varargin)
         m = 2;
     end
 
-    [grid, eps, ~, J] = maxwell_grid(2*pi/1.55, x, y, z);
+    [grid, eps, ~, J] = maxwell_grid(2*pi/1.55 + 0.001i, x, y, z);
+    % grid.omega = real(grid.omega);
 
     eps = maxwell_shape(grid, eps, 13, maxwell_box([0 0 0], [inf .4 .2]));
 
     J = maxwell_wgmode(grid, eps, [0 0 0], [+inf 2 2], 'mode_number', m);
 
     % cb = maxwell_solve_async(grid, eps, J);
-    cb = maxopt_solveAT(grid, eps, J);
+    % grid.omega = real(grid.omega);
+    cb = maxopt_solve_adjoint(grid, eps, J);
 
     while ~cb(); end;
 

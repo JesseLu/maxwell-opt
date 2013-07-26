@@ -25,25 +25,38 @@ function [fun, x0] = case3_L3(type, varargin)
         % Return appropriate function handle.
         %
         
+
+    % Save previously used values.
+    omega_cache = []; 
+    E_cache = [];
+
+    function [fval, grad_f, omega, E, H, grid, eps] = cached_solve(varargin)
+        [fval, grad_f, omega, E, H, grid, eps] = ...
+            solve_resonator(varargin{:}, omega_cache, E_cache); 
+            % solve_resonator(varargin{:}, omega_cache, E_cache);
+        omega_cache = omega;
+        E_cache = E;
+    end
+
     function [omega, E, H, grid, eps] = get_fields(varargin)
-        [~, ~, omega, E, H, grid, eps] = solve_resonator(varargin{:});
+        [~, ~, omega, E, H, grid, eps] = cached_solve(varargin{:});
     end
 
     switch type
         case 'get_fields'
             fun = @(x) get_fields(pc_size, x, options.flatten, false);
         case 'fval'
-            fun = @(x) solve_resonator(pc_size, x, options.flatten, false);
+            fun = @(x) cached_solve(pc_size, x, options.flatten, false);
         case 'grad_f'
-            fun = @(x) solve_resonator(pc_size, x, options.flatten, true);
+            fun = @(x) cached_solve(pc_size, x, options.flatten, true);
         otherwise
             error('Invalid type.');
     end
 end
 
 
-function [fval, df_dp, omega, E, H, grid, eps] = ...
-                    solve_resonator(pc_size, shifts, flatten, calc_grad)
+function [fval, grad_f, omega, E, H, grid, eps] = ...
+                    solve_resonator(pc_size, shifts, flatten, calc_grad, omega_guess, E_guess)
 % Simulate a photonic crystal resonator.
 % Also return the structural gradient.
 
@@ -53,83 +66,96 @@ function [fval, df_dp, omega, E, H, grid, eps] = ...
 
     if any(abs(shifts) > 3.2) % Check for shifts which are way too large.
         fval = 1e9;
-        df_dp = -1e9 * shifts;
+        grad_f = -1e9 * shifts;
         return
     end
 
 
         %
-        % Get the initial excitation.
+        % Get the initial guess field.
         %
 
     [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
+    [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
+    if isempty(omega_guess)
+        if flatten
+            % Use a central point excitation.
+            x = x-1; % Slight adjustment.
+            y = y;
+            J{2}(x+[0 1], y, z) = 1;
+        
+        else % If 3D recursively use 2D eigenmode as initial excitation.
 
-    if flatten
+            [~, ~, ~, E] = solve_resonator(pc_size, shifts, true, calc_grad, [], []);
+            J{2}(:,:,z) = E{2};
+        end
 
-        % Use a central point excitation.
-        [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
-        x = x-1; % Slight adjustment.
-        y = y;
-        J{2}(x+[0 1], y, z) = 1;
-    
-    else % If 3D recursively use 2D eigenmode as initial excitation.
-
-        [~, ~, ~, E] = solve_resonator(pc_size, shifts, true, calc_grad);
-        [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
-        J{2}(:,:,z) = E{2};
+        [E, H] = maxwell_solve(grid, eps, J);
+    else
+        [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
+        E = E_guess;
     end
 
-    [E, H] = maxwell_solve(grid, eps, J);
-    [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
 
-    figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0], 'field_phase', nan); % Visualize.
+        %
+        % Solve for the eigenmode.
+        %
+
+    [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
+    figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0]); % Visualize.
 
 
         % 
         % Measure power reflected back to the center (figure of merit).
         %
 
-    function [fval] = fitness(E)
-        E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
-        fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
-        fval = -norm(E_meas); % This is the figure of merit.
+    function [fval, grad_E] = fitness(E)
+    % Calculates figure of merit and its derivative.
+        fval = -abs(E{2}(x, y, z)); % This is the figure of merit.
+
+        % Field gradient.
+        grad_E = my_default_field(grid.shape, 0); 
+        grad_E{2}(x, y, z) = -E{2}(x, y, z) / abs(E{2}(x, y, z));
     end
         
-%     E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
-%     fval = -0.5 * norm(E_meas)^2; % This is the figure of merit.
-    fval = fitness(E);
+    [fval, grad_E] = fitness(E);
+
+    % Use to check that grad_E matches the fitness function.
+    [vec, unvec] = my_vec(grid.shape);
+    my_gradient_test(@(x) fitness(unvec(x)), vec(grad_E).', vec(E), true, 'df/dx');
 
 
         % 
-        % Calculate gradient.
+        % Calculate structural gradient.
         %
 
     if ~calc_grad % Skip if not needed.
-        df_dp = nan;
+        grad_f = nan;
         return
     end
 
-    % Field gradient.
-    grad_E = my_default_field(grid.shape, 0); 
-    a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
-    grad_E{2}(x, y, z) = -E{2}(x, y, z) / a;
-    grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / a;
-
-    % Function handle for creating the structure.
     function [eps] = make_eps(params)
+    % Function handle for creating the structure.
         [~, eps] = make_resonator_structure(pc_size, params, flatten);
+    end
+
+    function [fval] = solve_fitness(eps)
+    % Function that evaluates the fitness based on eps.
+        [omega_fit, E_fit, H_fit] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
+        fval = fitness(E_fit);
     end
 
     % Calculate the structural gradient.
     if ~flatten; figure(3); end
-    df_dp = maxopt_gradients(grid, E, grad_E, shifts, @make_eps, ...
-                'fitness', @(eps) fitness(maxwell_solve(grid, eps, J)), ...
-                'check_gradients', false);
+    grid.omega = (omega);
+    grad_f = maxopt_solve_gradient(grid, E, grad_E, shifts, @make_eps, ...
+                'fitness', @solve_fitness, ...
+                'check_gradients', true);
 end
 
 
 
-function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
+function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, varargin)
 % Function to create a square lattice photonic crystal structure.
 
         %
@@ -138,11 +164,24 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
 
     % Make a grid for a wavelength of 1550 nm.
     d = 0.025;
-    if flatten
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.911, -2.6:d:2.6, -2:d:2, 0); % 2D.
+    x = -2.6:d:2.6;
+    y = -2:d:2;
+    z = -1.5:d:1.5;
+
+    if ~isempty(varargin)
+        omega = [varargin{1}, varargin{1}];
     else
-        [grid, eps, ~, J] = maxwell_grid(2*pi/1.583, -2.6:d:2.6, -2:d:2, -1.5:d:1.5);
+        omega = [2*pi/1.911, 2*pi/1.583];
     end
+
+    if flatten
+        omega = omega(1);
+        z = 0;
+    else
+        omega = omega(2);
+    end
+
+    [grid, eps, ~, J] = maxwell_grid(omega, x, y, z);
 
 
         %

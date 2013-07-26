@@ -48,14 +48,18 @@ function [cb] = maxopt_solve_adjoint(grid, eps_mu, J, varargin)
             sdx.*sdy.*spz};
      
     % Conjugate all the elements which compose the A matrix.
-    grid.omega = conj(grid.omega);
     for k = 1 : 3
         grid.s_prim{k} = conj(grid.s_prim{k});
         grid.s_dual{k} = conj(grid.s_dual{k});
         eps{k} = conj(eps{k});
         mu{k} = conj(mu{k});
-        J{k} = (J{k}) ./ conj(s{k}); % Invert by conjugate of s.
+
+        % Invert by conjugate of s.
+        % Also, take care of the problem that omega needs to be conjugated
+        % for matrix A, but not for b.
+        J{k} = (grid.omega) / conj(grid.omega) * (J{k}) ./ conj(s{k}); 
     end
+    grid.omega = conj(grid.omega);
 
 
         % 
