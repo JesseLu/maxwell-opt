@@ -114,12 +114,14 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
     % Calculates figure of merit and its derivative.
         fval = 0.5 * norm(w)^2;
         grad_w = w;
+        fval = imag(w);
+        grad_w = -1i;
     end
         
     [fval, grad_w] = fitness(omega);
 
-    % Use to check that grad_E matches the fitness function.
-    my_gradient_test(@(w) fitness(w), grad_w, omega, 'real', 'df/dw');
+%     % Use to check that grad_E matches the fitness function.
+%     my_gradient_test(@(w) fitness(w), grad_w, omega, 'real_with_imag', 'df/dw');
 
 
         % 
@@ -147,7 +149,7 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
     grad_f = maxopt_solve_gradW(grid, omega, E, grad_w, shifts, @make_eps, ...
                 'solver', @solver, ...
                 'fitness', @fitness, ...
-                'check_gradients', true);
+                'check_gradients', false);
 end
 
 
