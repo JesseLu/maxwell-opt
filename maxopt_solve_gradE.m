@@ -93,14 +93,14 @@ function [struct_grad] = maxopt_solve_gradE(grid, E, grad_E, params0, ...
         A = maxwell_axb(grid, unvec(z0), E, E);
         fprintf('Error from A_dagger solve: %e\n', norm(A'*y - grad_x0));
 
-        my_gradient_test(p2z, grad_p, params0, false, 'dz/dp') % Test grad_p (dz/dp).
+        my_gradient_test(p2z, grad_p, params0, 'complex', 'dz/dp') % Test grad_p (dz/dp).
 
         if ~isempty(options.fitness)
             % Check grad_z.
-            my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
+            my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, 'real', 'df/dz');
 
             % Check struct_grad.
-            my_gradient_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, true, 'df/dp');
+            my_gradient_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, 'real', 'df/dp');
         end
 
 %             % Check equivalence of Ax-b and Bz-d.

@@ -119,7 +119,7 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
     [fval, grad_w] = fitness(omega);
 
     % Use to check that grad_E matches the fitness function.
-    my_gradient_test(@(w) fitness(w), grad_w, omega, true, 'df/dw');
+    my_gradient_test(@(w) fitness(w), grad_w, omega, 'real', 'df/dw');
 
 
         % 

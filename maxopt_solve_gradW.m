@@ -1,7 +1,7 @@
 %% maxopt_solve_gradW
 % Calculate structural gradients for frequency of the eigenmode.
 
-function [struct_grad] = maxopt_solve_gradient( grid, omega, E, grad_w, params0, ...
+function [omega_grad] = maxopt_solve_gradient( grid, omega, E, grad_w, params0, ...
                                                 create_eps, varargin)
                                                         
 
@@ -52,24 +52,26 @@ function [struct_grad] = maxopt_solve_gradient( grid, omega, E, grad_w, params0,
     p2z = @(p) vec(create_eps(p));
     z0 = p2z(params0);
 
-    B = spdiags(-omega^2 * vec(E), 0, N, N);
     lambda = omega^2;
 
 
         %
         % Find the derivative.
         %
+%     grid.omega = omega;
+%     A = maxwell_axb(grid, unvec(z0), unvec(x0), unvec(x0));
+%     norm(A*x0) / norm(x0)
+%     norm(y0'*A) / norm(y0)
 
-    % Find the dw/dlambda derivative.
+    % Find the df/dlambda derivative.
+    lambda2w = @sqrt;
     grad_l = grad_w * 0.5 * lambda^(-1/2);
-    % my_gradient_test(@(omega) options.fitness(omega), grad_w, omega, true, 'df/dw');
-    my_gradient_test(@(lambda) options.fitness(sqrt(lambda)), grad_l, omega^2, true, 'df/dlambda');
 
     % Find the dlambda/dz derivative.
-    grad_z = (1 / (y0' * x0)) * (y0' * B); % Using B is not right here. Need to use "F-field".
-    % A = maxwell_axb(grid, unvec(z), unvec(x0), unvec(x0));
-    lambda
-    my_gradient_test(@(z) (options.solver(unvec(z))), grad_z, z0, false, 'df/dz');
+    grad_z = -(lambda / (y0' * (z0 .* x0))) * (conj(y0) .* x0);
+
+    % Get the df/dz derivative.
+    df_dz = grad_l  * grad_z;
 
     % Find the dz/dp derivative.
     progress_text = '';
@@ -88,36 +90,15 @@ function [struct_grad] = maxopt_solve_gradient( grid, omega, E, grad_w, params0,
 %         pause
     end
 
-    grad_z = -y' * B; % Form the df/dz derivative.
-    df_dp = grad_z * grad_p; % Form the structural gradient.
-    grad = real(df_dp).';
+    df_dp = df_dz.' * grad_p; % Form the structural gradient.
+    omega_grad = real(df_dp).';
 
 
-    if options.check_gradients
-        % Check result of the dagger solve.
-        A = maxwell_axb(grid, unvec(z0), E, E);
-        fprintf('Error from A_dagger solve: %e\n', norm(A'*y - grad_x0));
-
-        my_gradient_test(p2z, grad_p, params0, false, 'dz/dp') % Test grad_p (dz/dp).
-
-        if ~isempty(options.fitness)
-            % Check grad_z.
-            my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, true, 'df/dz');
-
-            % Check struct_grad.
-            my_gradient_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, true, 'df/dp');
-        end
-
-%             % Check equivalence of Ax-b and Bz-d.
-%             z0 = p2z(params0);
-%             x0 = vec(E);
-%             multA = maxwell_axb(grid, unvec(z0), E, E, 'functional', true);
-%             b = randn(N, 1);
-%             d = b - (multA(x0) + grid.omega^2 * (z0 .* x0));
-%     
-%             res1 = multA(x0) - b;
-%             res2 = B * z0 - d;
-%     
-%             fprintf('Error between Ax-b and Bz-d: %e\n', norm(res1 - res2)/norm(res1));
+    if options.check_gradients % Check results.
+        my_gradient_test(@(lambda) options.fitness(sqrt(lambda)), grad_l, lambda, 'real', 'df/dlambda');
+        my_gradient_test(@(z) (options.solver(unvec(z))), grad_z.', z0, 'complex', 'dlambda/dz');
+        my_gradient_test(@(z) options.fitness(lambda2w(options.solver(unvec(z)))), df_dz.', z0, 'real', 'dlambda/dz');
+        my_gradient_test(p2z, grad_p, params0, 'complex', 'dz/dp') % Test grad_p (dz/dp).
+        my_gradient_test(@(p) options.fitness(lambda2w(options.solver(unvec(p2z(p))))), df_dp, params0, 'real', 'df/dp');
     end
 
