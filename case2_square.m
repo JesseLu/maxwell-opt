@@ -43,8 +43,8 @@ end
 
 function [fval, grad_f, E, H, grid, eps] = ...
                     solve_resonator(pc_size, shifts, flatten, calc_grad)
-% Simulate a photonic crystal resonator.
-% Also return the structural gradient.
+% Simulate a square photonic crystal array with shifts, 
+% also return the structural gradient.
 
         %
         % Sanity check for shifts.
@@ -69,9 +69,8 @@ function [fval, grad_f, E, H, grid, eps] = ...
     y = y;
     J{2}(x+[0 1], y, z) = 1;
 
-    % Solve.
     if ~flatten; figure(3); end
-    [E, H] = maxwell_solve(grid, eps, J);
+    [E, H] = maxwell_solve(grid, eps, J); % Solve.
 
     figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0], 'field_phase', nan); % Visualize.
 
@@ -154,7 +153,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
     eps = maxwell_shape(grid, eps, si_eps, ...
                         maxwell_box([0 0 0], [inf inf height]));
 
-    % Draw photonic crystal.
+    % Determine positions of holes.
     shifts = reshape(shifts, [round(numel(shifts)/2) 2]);
     pos = {};
     cnt = 1;
@@ -170,6 +169,7 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten)
         end
     end
 
+    % Draw photonic crystal.
     for k = 1 : length(pos)
         eps = maxwell_shape(grid, eps, air_eps, ...
                             maxwell_cyl_smooth(pos{k}, radius, 2*height, ...

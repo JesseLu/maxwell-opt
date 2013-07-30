@@ -1,7 +1,7 @@
-%% my_grad_descent
+%% maxopt_gradient_descent
 % Simple gradient descent algorithm 
 
-function [x, fval, hist] = my_grad_descent(fun, x0, varargin)
+function [x, fval, hist] = maxopt_gradient_descent(fun, x0, varargin)
 
     
     % Parse options.

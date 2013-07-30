@@ -18,7 +18,6 @@ function [fval, x, f_vis] = example3_eigenmode(case_name, varargin)
         % Set up the optimization problem.
         %
 
-
     switch case_name
         case 'L3'
             [fun, x] = case3_L3('grad_f', 'flatten', options.flatten);
@@ -37,8 +36,14 @@ function [fval, x, f_vis] = example3_eigenmode(case_name, varargin)
         title('structure optimization progress');
     end
 
+
+        %
+        % Run the (adjoint) optimization.
+        %
+
     if ~options.sim_only
-        [x, fval, hist] = my_grad_descent(fun, x,   'init_step', 0.1, ...
+        [x, fval, hist] = maxopt_gradient_descent(fun, x, ...
+                                                    'init_step', 0.1, ...
                                                     'max_delta', 0.1, ...
                                                     'vis_progress', @vis_progress);
     end

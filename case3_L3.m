@@ -22,25 +22,34 @@ function [fun, x0] = case3_L3(type, varargin)
 
 
         %
-        % Return appropriate function handle.
+        % Helper functions for solving for the eigenmode.
         %
-        
 
     % Save previously used values.
     omega_cache = []; 
     E_cache = [];
 
     function [fval, grad_f, omega, E, H, grid, eps] = cached_solve(varargin)
+    % This is a cached solve which uses the most recent omega and E values
+    % as initial guesses for the eigenmode solve.
+
         [fval, grad_f, omega, E, H, grid, eps] = ...
-            solve_resonator(varargin{:}, omega_cache, E_cache); 
-            % solve_resonator(varargin{:}, omega_cache, E_cache);
+            solve_resonator(varargin{:}, omega_cache, E_cache); % Solve.
+
+        % Update cached values.
         omega_cache = omega;
         E_cache = E;
     end
 
     function [omega, E, H, grid, eps] = get_fields(varargin)
+    % Just return the resulting eigenmode field.
         [~, ~, omega, E, H, grid, eps] = cached_solve(varargin{:});
     end
+
+
+        %
+        % Return appropriate function handle.
+        %
 
     switch type
         case 'get_fields'
@@ -55,10 +64,10 @@ function [fun, x0] = case3_L3(type, varargin)
 end
 
 
+
+% Simulate an L3 photonic crystal resonator and return a gradient.
 function [fval, grad_f, omega, E, H, grid, eps] = ...
                     solve_resonator(pc_size, shifts, flatten, calc_grad, omega_guess, E_guess)
-% Simulate a photonic crystal resonator.
-% Also return the structural gradient.
 
         %
         % Sanity check for shifts.
@@ -73,25 +82,32 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
 
         %
         % Get the initial guess field.
+        % If 2D, use a central excitation at the guess frequency.
+        % If 3D, use the 2D eigenmode as as the excitation at the central plane
+        % to obtain the initial guess E-field.
         %
 
     [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
     [x, y, z] = maxwell_pos2ind(grid, 'Ey', [0 0 0]); % Get central Ey component.
-    if isempty(omega_guess)
-        if flatten
-            % Use a central point excitation.
+
+    if isempty(omega_guess) % Don't need if we already have a cached guess.
+
+        % Obtain the excitation that we'll use for obtaining the guess field.
+        if flatten % 2D case.
             x = x-1; % Slight adjustment.
             y = y;
-            J{2}(x+[0 1], y, z) = 1;
+            J{2}(x+[0 1], y, z) = 1; % Use a central point excitation.
         
-        else % If 3D recursively use 2D eigenmode as initial excitation.
-
-            [~, ~, ~, E] = solve_resonator(pc_size, shifts, true, calc_grad, [], []);
-            J{2}(:,:,z) = E{2};
+        else % 3D case.
+            [~, ~, ~, E] = solve_resonator(pc_size, shifts, true, false, [], []); % 2D solve
+            J{1}(:,:,z) = E{1}; % Use it as the excitation at the central plane.
+            J{2}(:,:,z) = E{2}; 
         end
 
+        % Run a simulation to obtain the initial guess field.
         [E, H] = maxwell_solve(grid, eps, J);
-    else
+
+    else % We have a cached guess, no need to simulate to get one.
         [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten);
         E = E_guess;
     end
@@ -106,12 +122,12 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
 
 
         % 
-        % Measure power reflected back to the center (figure of merit).
+        % Compose and evaluate fitness function (function to minimize).
         %
 
     [vec, unvec] = my_vec(grid.shape);
     function [fval, grad_w] = fitness(w)
-    % Calculates figure of merit and its derivative.
+    % Calculates figure of merit (fitness function) and its derivative.
         fval = 0.5 * norm(w)^2;
         grad_w = w;
         fval = imag(w);
@@ -120,12 +136,12 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
         
     [fval, grad_w] = fitness(omega);
 
-%     % Use to check that grad_E matches the fitness function.
+%     % Use to check that grad_w matches the fitness function.
 %     my_gradient_test(@(w) fitness(w), grad_w, omega, 'real_with_imag', 'df/dw');
 
 
         % 
-        % Calculate structural gradient.
+        % Calculate structural gradient needed for gradient descent optimization.
         %
 
     if ~calc_grad % Skip if not needed.
@@ -140,6 +156,7 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
 
     function [lambda] = solver(eps)
     % Function that evaluates the fitness based on eps.
+    % Only used for gradient checking.
         [omega_fit, E_fit, H_fit] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
         lambda = omega_fit^2;
     end
@@ -159,6 +176,8 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
 
         %
         % Create grid.
+        % Note that we keep frequencies constant in order to have constant PML
+        % scale factors.
         %
 
     % Make a grid for a wavelength of 1550 nm.
@@ -166,18 +185,11 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
     x = -2.6:d:2.6;
     y = -2:d:2;
     z = -1.5:d:1.5;
-
-    if ~isempty(varargin)
-        omega = [varargin{1}, varargin{1}];
-    else
-        omega = [2*pi/1.911, 2*pi/1.583];
-    end
+    omega = 2*pi/1.583;
 
     if flatten
-        omega = omega(1);
+        omega = 2*pi/1.911;
         z = 0;
-    else
-        omega = omega(2);
     end
 
     [grid, eps, ~, J] = maxwell_grid(omega, x, y, z);
@@ -200,7 +212,9 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
     eps = maxwell_shape(grid, eps, si_eps, ...
                         maxwell_box([0 0 0], [inf inf height]));
 
-    % Draw photonic crystal.
+    % Determine the positions of the etched holes.
+    % Things get a little complicated here because we force x- and y-symmetry.
+    % In particular, note that many shift parameters go ignored.
     shifts = reshape(shifts, [round(numel(shifts)/2) 2]);
     pos = {};
     cnt = 0;
@@ -209,44 +223,52 @@ function [grid, eps, J] = make_resonator_structure(pc_size, shifts, flatten, var
             cnt = cnt + 1;
             p{1} = a * ((i+floor(j/2))*a1 + j*a2);
 
-            if p{1}(1) < 0 % Skip.
+            % Skip holes that have negative x-position.
+            if p{1}(1) < 0 
                 continue
             end
 
-            if (i == 0 || i == 1) && j == 0 % Skip the 3 holes to be removed.
+            % Skip the 3 holes to be removed.
+            if (i == 0 || i == 1) && j == 0 
                 continue
             end
             
+            % Add x-shift.
             if p{1}(1) ~= 0
-                p{1}(1) = p{1}(1) + shifts(cnt, 1); % Add shift.
+                p{1}(1) = p{1}(1) + shifts(cnt, 1);
             end
 
+            % Add y-shift.
             if p{1}(2) ~= 0
-                p{1}(2) = p{1}(2) + shifts(cnt, 2); % Add shift.
+                p{1}(2) = p{1}(2) + shifts(cnt, 2);
             end
 
+            % Reflect across x.
             if p{1}(1) == 0
                 p{2} = [];
             else
                 p{2} = p{1} .* [-1 1 1];
             end
 
+            % Reflect across y.
             if p{1}(2) == 0
                 p{3} = [];
             else
                 p{3} = p{1} .* [1 -1 1];
             end
 
+            % Reflect across x and y.
             if p{1}(1) == 0 || p{1}(2) == 0
                 p{4} = [];
             else
                 p{4} = p{1} .* [-1 -1 1];
             end
 
-            pos = [pos, p];
+            pos = [pos, p]; % Add to position list.
         end
     end
 
+    % Create the holes in the L3 structure.
     for k = 1 : length(pos)
         if ~isempty(pos{k})
             eps = maxwell_shape(grid, eps, air_eps, ...
