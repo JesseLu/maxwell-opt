@@ -1,7 +1,7 @@
 %% example3_eigenmode
 % Derivative-based optimization of an L3 cavity mode.
 
-function [params, E, H, grid, eps] = example3_eigenmode(case_name, varargin)
+function [fval, x, f_vis] = example3_eigenmode(case_name, varargin)
 
         %
         % Parse inputs.
@@ -21,7 +21,7 @@ function [params, E, H, grid, eps] = example3_eigenmode(case_name, varargin)
 
     switch case_name
         case 'L3'
-            [fun, x0] = case3_L3('grad_f', 'flatten', options.flatten);
+            [fun, x] = case3_L3('grad_f', 'flatten', options.flatten);
             [f_vis] = case3_L3('get_fields', 'flatten', options.flatten);
         otherwise
             error('Invalid case_name.');
@@ -38,19 +38,9 @@ function [params, E, H, grid, eps] = example3_eigenmode(case_name, varargin)
     end
 
     if ~options.sim_only
-        [x, fval, hist] = my_grad_descent(fun, x0,  'init_step', 0.1, ...
+        [x, fval, hist] = my_grad_descent(fun, x,   'init_step', 0.1, ...
                                                     'max_delta', 0.1, ...
                                                     'vis_progress', @vis_progress);
     end
-
-        
-        %
-        % Perform the optimization.
-        %
-        
-    [x, fval, hist] = my_grad_descent(f, x0,    'init_step', 0.1, ...
-                                                'max_delta', 0.1, ...
-                                                'max_iters', options.iters, ...
-                                                'vis_progress', @vis_progress);
 
 end
