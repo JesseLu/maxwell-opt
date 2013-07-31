@@ -1,7 +1,9 @@
 %% maxopt_example3_eigenmode
 % Derivative-based optimization of an L3 cavity mode.
 
-function [fval, x, f_vis] = maxopt_example3_eigenmode(case_name, varargin)
+function [fval, x, f_vis] = maxopt_example3_eigenmode(varargin)
+
+    case_name = 'L3';
 
         %
         % Parse inputs.
@@ -20,8 +22,8 @@ function [fval, x, f_vis] = maxopt_example3_eigenmode(case_name, varargin)
 
     switch case_name
         case 'L3'
-            [fun, x] = case3_L3('grad_f', 'flatten', options.flatten);
-            [f_vis] = case3_L3('get_fields', 'flatten', options.flatten);
+            [fun, x] = maxopt_case_L3('grad_f', 'flatten', options.flatten);
+            [f_vis] = maxopt_case_L3('get_fields', 'flatten', options.flatten);
         otherwise
             error('Invalid case_name.');
     end

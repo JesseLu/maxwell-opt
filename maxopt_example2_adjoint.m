@@ -2,7 +2,9 @@
 % Form a cavity out of a square lattice using gradient optimization.
 
 
-function [fval, x, f_vis] = maxopt_example2_adjoint(case_name, varargin)
+function [fval, x, f_vis] = maxopt_example2_adjoint(varargin)
+
+    case_name = 'squarepc';
 
         %
         % Parse inputs.
@@ -18,9 +20,9 @@ function [fval, x, f_vis] = maxopt_example2_adjoint(case_name, varargin)
         %
 
     switch case_name
-        case 'square_pc'
-            [f, x0] = case2_square('grad_f', 'flatten', options.flatten);
-            [f_vis] = case2_square('get_fields', 'flatten', options.flatten);
+        case 'squarepc'
+            [f, x0] = maxopt_case_squarepc('grad_f', 'flatten', options.flatten);
+            [f_vis] = maxopt_case_squarepc('get_fields', 'flatten', options.flatten);
         otherwise
             error('Invalid case_name.');
     end
