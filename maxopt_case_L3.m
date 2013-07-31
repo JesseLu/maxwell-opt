@@ -136,9 +136,6 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
         
     [fval, grad_w] = fitness(omega);
 
-%     % Use to check that grad_w matches the fitness function.
-%     my_gradient_test(@(w) fitness(w), grad_w, omega, 'real_with_imag', 'df/dw');
-
 
         % 
         % Calculate structural gradient needed for gradient descent optimization.
@@ -165,7 +162,6 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
     if ~flatten; figure(3); end
     grad_f = maxopt_freq_gradient(grid, E, omega, @fitness, shifts, @make_eps, ...
                 'solver', @solver, ...
-                'fitness', @fitness, ...
                 'check_gradients', false);
 end
 

@@ -81,24 +81,17 @@ function [fval, grad_f, E, H, grid, eps] = ...
 
     function [fval, grad_E] = fitness(E)
     % Calculates figure of merit and its derivative.
+        % Figure of merit.
         E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
         fval = -sum(abs(E_meas)); % This is the figure of merit.
-        fval = -abs(E{2}(x,y,z));
-        fval = -0.5 * norm(E{2}(x,y,z))^2;
 
         % Field gradient.
         grad_E = my_default_field(grid.shape, 0); 
-%         a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
-%         grad_E{2}(x, y, z) = -E{2}(x, y, z) / abs(E{2}(x, y, z));
-%         grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / abs(E{2}(x+1, y, z));
-        grad_E{2}(x,y,z) = -(E{2}(x,y,z));
+        grad_E{2}(x, y, z) = -E{2}(x, y, z) / abs(E{2}(x, y, z));
+        grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / abs(E{2}(x+1, y, z));
     end
         
     [fval, grad_E] = fitness(E);
-% 
-%     % Use to check that grad_E matches the fitness function.
-%     [vec, unvec] = my_vec(grid.shape);
-%     my_gradient_test(@(x) fitness(unvec(x)), vec(grad_E), vec(E), 'real_with_imag', 'df/dx');
 
 
         % 

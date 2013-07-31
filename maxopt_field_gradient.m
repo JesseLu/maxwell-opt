@@ -71,28 +71,39 @@ function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, fitness_fun, ..
 
 
         %
-        % Find the derivative.
+        % Compute the adjoint and the dz/dp derivative while waiting.
         %
 
-    fprintf('[start adjoint solve] '); % Initiate adjoint solve.
+    % Initiate adjoint solve.
+    fprintf('[start adjoint solve] '); 
     cb = solve_A_dagger(z0, grad_x0);
 
-    grad_p = my_parameter_gradient(p2z, params0, options.delta_p); % Find the dz/dp derivative.
+    % Find the dz/dp derivative.
+    dz_dp = my_parameter_gradient(p2z, params0, options.delta_p); 
 
-    while ~cb(); end % Complete adjoint solve.
+    % Complete adjoint solve.
+    while ~cb(); end 
     [~, y] = cb();
     y = vec(y);
 
-    df_dz = -y' * B; % Form the df/dz derivative.
-    df_dp = df_dz * grad_p; % Form the parameter derivative.
 
-    % Output gradients.
+        %
+        % Form the derivative.
+        %
+    
+    % Form the df/dz derivative.
+    df_dz = -y' * B; 
+
+    % Form df/dp the parameter derivative.
+    df_dp = df_dz * dz_dp; 
+
+    % Output parameters.
     param_grad = real(df_dp');
     eps_grad = df_dz';
 
 
         %
-        % Check gradients, if needed.
+        % Check gradients, if desired.
         %
 
     if options.check_gradients
@@ -100,7 +111,7 @@ function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, fitness_fun, ..
         A = maxwell_axb(grid, unvec(z0), E, E);
         fprintf('Error from A_dagger solve: %e\n', norm(A'*y - grad_x0));
 
-        my_gradient_test(p2z, grad_p', params0, 'real', 'dz/dp'); % Test dz/dp.
+        my_gradient_test(p2z, dz_dp', params0, 'real', 'dz/dp'); % Test dz/dp.
 
         if ~isempty(options.solver_fun)
             my_gradient_test(@(z) fitness_fun(options.solver_fun(unvec(z))), df_dz', z0, 'real', 'df/dz');
