@@ -1,8 +1,8 @@
-%% example1_search
+%% maxopt_example1_search
 % Derivative-free optimization of a nanophotonic grating coupler.
 
 
-function [fval, x0, f_vis] = example1_search(case_name, varargin)
+function [fval, x0, f_vis] = maxopt_example1_search(case_name, varargin)
 
         %
         % Parse inputs.

@@ -1,7 +1,7 @@
-%% case1_grating
+%% maxopt_case_grating
 % Sets up a grating coupler optimization problem.
 
-function [fun, x0] = case1_grating(type, varargin)
+function [fun, x0] = maxopt_case_grating(type, varargin)
 
         %
         % Parse inputs.

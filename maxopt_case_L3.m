@@ -1,7 +1,7 @@
-%% case3_L3
-% L3 photonic crystal resonator.
+%% maxopt_case_L3
+% Sets up the optimization for an L3 photonic crystal resonator.
 
-function [fun, x0] = case3_L3(type, varargin)
+function [fun, x0] = maxopt_case_L3(type, varargin)
 
         %
         % Parse inputs.

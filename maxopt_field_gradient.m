@@ -1,8 +1,8 @@
-%% maxopt_solve_gradE
+%% maxopt_field_gradient
 % Calculate structural gradients for frequency of the eigenmode.
 
-function [struct_grad] = maxopt_solve_gradE(grid, E, grad_E, params0, ...
-                                            create_eps, varargin)
+function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, grad_E, params0, ...
+                                                create_eps, varargin)
                                                         
 
         %
@@ -85,7 +85,8 @@ function [struct_grad] = maxopt_solve_gradE(grid, E, grad_E, params0, ...
 
     grad_z = -y' * B; % Form the df/dz derivative.
     df_dp = grad_z * grad_p; % Form the structural gradient.
-    struct_grad = real(df_dp).';
+    param_grad = real(df_dp).';
+    eps_grad = grad_z.';
 
 
     if options.check_gradients

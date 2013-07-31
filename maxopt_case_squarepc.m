@@ -1,7 +1,7 @@
-%% case2_square
-% Sets up a square photonic crystal resonator design problem.
+%% maxopt_case_squarepc
+% Sets up optimization problem for a square photonic crystal array.
 
-function [fun, x0] = case2_square(type, varargin)
+function [fun, x0] = maxopt_case_squarepc(type, varargin)
 
         %
         % Parse inputs.

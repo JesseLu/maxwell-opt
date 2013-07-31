@@ -1,8 +1,8 @@
-%% example2_adjoint
+%% maxopt_example2_adjoint
 % Form a cavity out of a square lattice using gradient optimization.
 
 
-function [fval, x, f_vis] = example2_adjoint(case_name, varargin)
+function [fval, x, f_vis] = maxopt_example2_adjoint(case_name, varargin)
 
         %
         % Parse inputs.
