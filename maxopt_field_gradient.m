@@ -1,8 +1,9 @@
 %% maxopt_field_gradient
-% Calculate structural gradients for frequency of the eigenmode.
+% Calculate structural gradients for the E-field of a simulation.
 
-function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, grad_E, params0, ...
-                                                create_eps, varargin)
+function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, fitness_fun, ...
+                                                        params0, create_eps, ...
+                                                        varargin)
                                                         
 
         %
@@ -11,14 +12,28 @@ function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, grad_E, params0
 
     my_validate_grid(grid, mfilename);
     my_validate_field(E, grid.shape, 'E', mfilename);
-    my_validate_field(grad_E, grid.shape, 'grad_E', mfilename);
-
+    validateattributes(params0, {'numeric'}, {'real', 'nonnan'}, 'params0', mfilename);
     validateattributes(create_eps, {'function_handle'}, {}, 'create_eps', mfilename);
+
+    % Check fitness_fun.
+    validateattributes(fitness_fun, {'function_handle'}, {}, 'fitness_fun', mfilename);
+    [fval, grad_E] = fitness_fun(E);
+    validateattributes(fval, {'numeric'}, {'scalar', 'real'}, ...
+                        'fval (from fitness_fun)', mfilename);
+    my_validate_field(grad_E, grid.shape, 'grad_Efval (from fitness_fun)', mfilename);
+
+    % Check fitness_fun's gradient.
+    [vec, unvec] = my_vec(grid.shape); % Helper function.
+    err = my_gradient_test(@(x) fitness_fun(unvec(x)), vec(grad_E), vec(E), 'real_with_imag', '');
+    if err > 1e-3
+        warning('Error in fitness_fun gradient is large (%e).', err);
+    end
+
 
     % Optional arguments.
     options = my_parse_options(struct(  'delta_p', 1e-6, ...
                                         'solver_args', {{}}, ...
-                                        'fitness', [], ...
+                                        'solver_fun', [], ...
                                         'check_gradients', false), ...
                                 varargin, mfilename);
 
@@ -59,49 +74,38 @@ function [param_grad, eps_grad] = maxopt_field_gradient(grid, E, grad_E, params0
         % Find the derivative.
         %
 
-    fprintf('[start adjoint solve] ');
+    fprintf('[start adjoint solve] '); % Initiate adjoint solve.
     cb = solve_A_dagger(z0, grad_x0);
 
-    % Find the dz/dp derivative.
-    progress_text = '';
-    for k = 1 : numel(params0) 
-        p = params0;
-        p(k) = p(k) + options.delta_p;
-        z = p2z(p);
-        grad_p(:, k) = sparse((z - z0) ./ options.delta_p);
+    grad_p = my_parameter_gradient(p2z, params0, options.delta_p); % Find the dz/dp derivative.
 
-        fprintf(repmat('\b', 1, length(progress_text)));
-        progress_text = sprintf('[%d/%d gradients computed] ', k, numel(params0));
-        fprintf(progress_text);
-
-%         % Debug.
-%         maxwell_view(grid, unvec((z - z0) ./ options.delta_p), [], 'y', [nan nan 0], 'clims', [-1 1]);
-%         pause
-    end
-
-    while ~cb(); end
+    while ~cb(); end % Complete adjoint solve.
     [~, y] = cb();
     y = vec(y);
 
-    grad_z = -y' * B; % Form the df/dz derivative.
-    df_dp = grad_z * grad_p; % Form the structural gradient.
-    param_grad = real(df_dp).';
-    eps_grad = grad_z.';
+    df_dz = -y' * B; % Form the df/dz derivative.
+    df_dp = df_dz * grad_p; % Form the parameter derivative.
 
+    % Output gradients.
+    param_grad = real(df_dp');
+    eps_grad = df_dz';
+
+
+        %
+        % Check gradients, if needed.
+        %
 
     if options.check_gradients
         % Check result of the dagger solve.
         A = maxwell_axb(grid, unvec(z0), E, E);
         fprintf('Error from A_dagger solve: %e\n', norm(A'*y - grad_x0));
 
-        my_gradient_test(p2z, grad_p, params0, 'complex', 'dz/dp') % Test grad_p (dz/dp).
+        my_gradient_test(p2z, grad_p', params0, 'real', 'dz/dp'); % Test dz/dp.
 
-        if ~isempty(options.fitness)
-            % Check grad_z.
-            my_gradient_test(@(z) options.fitness(unvec(z)), grad_z, z0, 'real', 'df/dz');
+        if ~isempty(options.solver_fun)
+            my_gradient_test(@(z) fitness_fun(options.solver_fun(unvec(z))), df_dz', z0, 'real', 'df/dz');
 
-            % Check struct_grad.
-            my_gradient_test(@(p) options.fitness(unvec(p2z(p))), df_dp, params0, 'real', 'df/dp');
+            my_gradient_test(@(p) fitness_fun(options.solver_fun(unvec(p2z(p)))), df_dp', params0, 'real', 'df/dp');
         end
 
 %             % Check equivalence of Ax-b and Bz-d.

@@ -1,7 +1,7 @@
-function my_gradient_test(fun, grad_x, x0, type, text)
+function [max_err, err] = my_gradient_test(fun, grad_x, x0, type, text)
    
-    delta = 1e-6;
     f0 = fun(x0);
+    delta = max(abs(f0(:))) / 1e6;
     for k = 1 : 10
         dx = delta * randn(size(x0));
         if strcmp(type, 'real_with_imag')
@@ -9,7 +9,7 @@ function my_gradient_test(fun, grad_x, x0, type, text)
         end
         f1 = fun(x0+dx);
         diff1 = f1 - f0;
-        diff2 = (grad_x * dx);
+        diff2 = (grad_x' * dx);
         switch type
             case {'real', 'real_with_imag'}
                 diff2 = real(diff2);
@@ -20,4 +20,10 @@ function my_gradient_test(fun, grad_x, x0, type, text)
         end
         err(k) = norm(diff1(:) - diff2(:)) / norm(diff1(:));
     end
-    fprintf('Max error (%s): %e\n', text, max(err));
+
+    max_err = max(err);
+
+    if length(text) > 0
+        fprintf('Max error (%s): %e\n', text, max_err);
+    end
+

@@ -1,20 +1,36 @@
 %% maxopt_freq_gradient
 % Calculate structural gradients for frequency of the eigenmode.
 
-function [param_grad, eps_grad] = maxopt_freq_gradient(grid, omega, E, grad_w, params0, ...
-                                                create_eps, varargin)
+function [param_grad, eps_grad] = maxopt_freq_gradient(grid, E, omega, fitness_fun, ...
+                                                        params0, create_eps, ...
+                                                        varargin)
                                                         
-
         %
         % Validate and parse inputs.
         %
 
     my_validate_grid(grid, mfilename);
     my_validate_field(E, grid.shape, 'E', mfilename);
+    validateattributes(omega, {'numeric'}, {'scalar', 'nonnan', 'finite'}, 'omega', mfilename);
+    validateattributes(params0, {'numeric'}, {'real', 'nonnan'}, 'params0', mfilename);
 
-    validateattributes(grad_w, {'numeric'}, ...
+    % Check fitness_fun.
+    validateattributes(fitness_fun, {'function_handle'}, {}, 'fitness_fun', mfilename);
+    [fval, grad_omega] = fitness_fun(omega);
+    validateattributes(fval, {'numeric'}, {'scalar', 'real'}, ...
+                        'fval (from fitness_fun)', mfilename);
+    validateattributes(grad_omega, {'numeric'}, {'scalar', 'nonnan', 'finite'}, ...
+                        'grad_omega (from fitness_fun)', mfilename);
+
+    % Check fitness_fun's gradient.
+    err = my_gradient_test(fitness_fun, grad_omega, omega, 'real_with_imag', '');
+    if err > 1e-3
+        warning('Error in fitness_fun gradient is large (%e).', err);
+    end
+
+    validateattributes(grad_omega, {'numeric'}, ...
                         {'nonnan', 'finite', 'scalar'}, ...
-                        'grad_w', mfilename);
+                        'grad_omega', mfilename);
 
     validateattributes(create_eps, {'function_handle'}, {}, 'create_eps', mfilename);
 
@@ -58,14 +74,10 @@ function [param_grad, eps_grad] = maxopt_freq_gradient(grid, omega, E, grad_w, p
         %
         % Find the derivative.
         %
-%     grid.omega = omega;
-%     A = maxwell_axb(grid, unvec(z0), unvec(x0), unvec(x0));
-%     norm(A*x0) / norm(x0)
-%     norm(y0'*A) / norm(y0)
 
     % Find the df/dlambda derivative.
     lambda2w = @sqrt;
-    grad_l = grad_w * 0.5 * lambda^(-1/2);
+    grad_l = grad_omega * 0.5 * lambda^(-1/2);
 
     % Find the dlambda/dz derivative.
     grad_z = -(lambda / (y0' * (z0 .* x0))) * (conj(y0) .* x0);
@@ -74,21 +86,7 @@ function [param_grad, eps_grad] = maxopt_freq_gradient(grid, omega, E, grad_w, p
     df_dz = grad_l  * grad_z;
 
     % Find the dz/dp derivative.
-    progress_text = '';
-    for k = 1 : numel(params0) 
-        p = params0;
-        p(k) = p(k) + options.delta_p;
-        z = p2z(p);
-        grad_p(:, k) = sparse((z - z0) ./ options.delta_p);
-
-        fprintf(repmat('\b', 1, length(progress_text)));
-        progress_text = sprintf('[%d/%d gradients computed] ', k, numel(params0));
-        fprintf(progress_text);
-
-%         % Debug.
-%         maxwell_view(grid, unvec((z - z0) ./ options.delta_p), [], 'y', [nan nan 0], 'clims', [-1 1]);
-%         pause
-    end
+    grad_p = my_parameter_gradient(p2z, params0, options.delta_p); % Find the dz/dp derivative.
 
     df_dp = df_dz.' * grad_p; % Form the structural gradient.
     param_grad = real(df_dp).';

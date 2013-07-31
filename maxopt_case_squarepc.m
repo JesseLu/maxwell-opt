@@ -83,20 +83,22 @@ function [fval, grad_f, E, H, grid, eps] = ...
     % Calculates figure of merit and its derivative.
         E_meas = [E{2}(x, y, z); E{2}(x+1, y, z)];
         fval = -sum(abs(E_meas)); % This is the figure of merit.
+        fval = -abs(E{2}(x,y,z));
+        fval = -0.5 * norm(E{2}(x,y,z))^2;
 
         % Field gradient.
         grad_E = my_default_field(grid.shape, 0); 
-        a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
-        grad_E{2}(x, y, z) = -E{2}(x, y, z) / abs(E{2}(x, y, z));
-        grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / abs(E{2}(x+1, y, z));
+%         a = norm([E{2}(x,y,z); E{2}(x+1,y,z)]);
+%         grad_E{2}(x, y, z) = -E{2}(x, y, z) / abs(E{2}(x, y, z));
+%         grad_E{2}(x+1, y, z) = -E{2}(x+1, y, z) / abs(E{2}(x+1, y, z));
+        grad_E{2}(x,y,z) = -(E{2}(x,y,z));
     end
         
     [fval, grad_E] = fitness(E);
-
+% 
 %     % Use to check that grad_E matches the fitness function.
 %     [vec, unvec] = my_vec(grid.shape);
-%     my_gradient_test(@(x) fitness(unvec(x)), vec(grad_E).', vec(E), true, 'df/dx');
-%     pause
+%     my_gradient_test(@(x) fitness(unvec(x)), vec(grad_E), vec(E), 'real_with_imag', 'df/dx');
 
 
         % 
@@ -115,8 +117,8 @@ function [fval, grad_f, E, H, grid, eps] = ...
 
     % Calculate the structural gradient.
     if ~flatten; figure(3); end
-    grad_f = maxopt_field_gradient(grid, E, grad_E, shifts, @make_eps, ...
-                'fitness', @(eps) fitness(maxwell_solve(grid, eps, J)), ...
+    grad_f = maxopt_field_gradient(grid, E, @fitness, shifts, @make_eps, ...
+                'solver_fun', @(eps) maxwell_solve(grid, eps, J), ...
                 'check_gradients', false);
 end
 
