@@ -117,7 +117,7 @@ function [fval, grad_f, omega, E, H, grid, eps] = ...
         % Solve for the eigenmode.
         %
 
-    [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E, 'err_thresh', 1e-2);
+    [omega, E, H] = maxwell_solve_eigenmode(grid, eps, E);
     figure(1); maxwell_view(grid, eps, E, 'y', [nan nan 0]); % Visualize.
 
 
